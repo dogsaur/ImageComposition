@@ -3,7 +3,7 @@ namespace may
 {
 	namespace image_composition
 	{
-		void BmpFileHeader::from_stream(std::ifstream & stream)
+		void BmpFileHeader::from_stream(std::fstream &stream)
 		{
 			UInt16 filemagic;
 			stream.read((char*)&filemagic, sizeof(filemagic));
@@ -11,8 +11,32 @@ namespace may
 			stream.seekg(4, std::ios::cur);
 			stream.read((char*)&offset, sizeof(offset));
 		}
+		void BmpFileHeader::to_stream(std::fstream &stream)
+		{
+			stream.write((char*)&magic, sizeof(magic));
+			stream.write((char*)&size, sizeof(size));
+			for (unsigned int i = 0; i < 4; ++i)
+				stream.put(0); // clear reserved fields
+			stream.write((char*)&offset, sizeof(offset));
+		}
 
-		void BmpInfoHeader::from_stream(std::ifstream & stream)
+		void BmpInfoHeader::to_stream(std::fstream &stream)
+		{
+			planes = 1;
+			stream.write((char*)&info_size, sizeof(info_size));
+			stream.write((char*)&width, sizeof(width));
+			stream.write((char*)&height, sizeof(height));
+			stream.write((char*)&planes, sizeof(planes));
+			stream.write((char*)&bit_count, sizeof(bit_count));
+			stream.write((char*)&compression, sizeof(compression));
+			stream.write((char*)&image_size, sizeof(image_size));
+			stream.write((char*)&x_pixels_per_meter, sizeof(x_pixels_per_meter));
+			stream.write((char*)&y_pixels_per_meter, sizeof(y_pixels_per_meter));
+			stream.write((char*)&clr_used, sizeof(clr_used));
+			stream.write((char*)&clr_important, sizeof(clr_important));
+		}
+
+		void BmpInfoHeader::from_stream(std::fstream & stream)
 		{
 			const UInt32 info_impl_size = 40;
 			stream.read((char*)&info_size, sizeof(info_size));
@@ -30,7 +54,7 @@ namespace may
 		}
 
 
-		
+
 		BitmapImage::BitmapImage() {}
 		BitmapImage::BitmapImage(std::string& filename)
 		{
@@ -46,7 +70,7 @@ namespace may
 		}
 		int BitmapImage::Load(const std::string& filename)
 		{
-			stream.open(filename.c_str());
+			stream.open(filename.c_str(), std::ios::in);
 			if (!stream.good())
 			{
 				return 1;
@@ -61,7 +85,22 @@ namespace may
 			width = info_header.width;
 			height = info_header.height;
 			read_data();
+			stream.close();
 			return 0;
+		}
+		int BitmapImage::Save(const std::string &filename)
+		{
+			stream.open(filename.c_str(), std::ios::out);
+			if (!stream.good())
+			{
+				return 1;
+			}
+			file_header.to_stream(stream);
+			info_header.to_stream(stream);
+			write_data();
+			stream.close();
+			return 0;
+
 		}
 		void BitmapImage::read_data()
 		{
@@ -121,6 +160,24 @@ namespace may
 				}
 				stream.seekg(pad_size, std::ios::cur);
 			}
+		}
+		void BitmapImage::write_data()
+		{
+			const unsigned int line_size = 3 * info_header.width;
+			const unsigned int pad_size = (line_size % 4) ? 4 - (line_size % 4) : 0;
+			for (int row = info_header.height - 1; row >= 0; --row)
+			{
+				for (int col = 0; col < info_header.width; ++col)
+				{
+
+					stream.put(Pixels[row][col].B);
+					stream.put(Pixels[row][col].G);
+					stream.put(Pixels[row][col].R);
+				}
+				stream.seekg(pad_size, std::ios::cur);
+			}
+			for (unsigned int p = 0; p < pad_size; ++p)
+				stream.put(0);
 		}
 	}
 }
